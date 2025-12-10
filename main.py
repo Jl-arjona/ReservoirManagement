@@ -4,9 +4,7 @@ Extended reservoir-management QUBO model (based on Sustainability 13, 3470).
 - Discretized y_ij in [0, 1] using K bits (QUBO).
 - Constraints implemented as quadratic penalties via
   dimod.BinaryQuadraticModel.add_linear_inequality_constraint.
-- Solvable with:
-    - neal.SimulatedAnnealingSampler (classical)
-    - D-Wave LeapHybridSampler (if available and token configured)
+- Solvable with the classical dwave.samplers SimulatedAnnealingSampler.
 
 Main entry point: run_example_from_article()
 """
@@ -20,13 +18,6 @@ import numpy as np
 import dimod
 
 from dwave.samplers import SimulatedAnnealingSampler
-
-
-try:
-    from dwave.system import LeapHybridSampler
-    HAVE_DWAVE = True
-except ImportError:
-    HAVE_DWAVE = False
 
 
 # ---------------------------------------------------------------------------
@@ -467,16 +458,13 @@ def example_instance_from_article() -> ReservoirInstance:
 
 
 def run_example_from_article(
-    use_dwave: bool = False,
     num_reads: int = 100
 ) -> None:
     """
     Build and solve the example instance using QUBO.
 
     Arguments:
-        use_dwave: if True and LeapHybridSampler is available, use it.
-                   otherwise, use neal.SimulatedAnnealingSampler.
-        num_reads: number of reads (for SA); ignored by hybrid sampler.
+        num_reads: number of reads for the simulated annealer.
     """
     inst = example_instance_from_article()
     pen = PenaltyConfig(
@@ -491,14 +479,9 @@ def run_example_from_article(
     bqm, x, y_bits = build_extended_bqm(inst, pen)
 
     # Choose sampler
-    if use_dwave and HAVE_DWAVE:
-        print("\nUsing LeapHybridSampler...")
-        sampler = LeapHybridSampler()
-        sampleset = sampler.sample(bqm)
-    else:
-        print("\nUsing SimulatedAnnealingSampler (neal)...")
-        sampler = SimulatedAnnealingSampler()
-        sampleset = sampler.sample(bqm, num_reads=num_reads)
+    print("\nUsing SimulatedAnnealingSampler from dwave.samplers...")
+    sampler = SimulatedAnnealingSampler()
+    sampleset = sampler.sample(bqm, num_reads=num_reads)
 
     best = sampleset.first
     sample = best.sample
@@ -509,5 +492,4 @@ def run_example_from_article(
 
 
 if __name__ == "__main__":
-    # Change use_dwave=True if you want to use LeapHybrid and have a token.
-    run_example_from_article(use_dwave=False, num_reads=50)
+    run_example_from_article(num_reads=50)
