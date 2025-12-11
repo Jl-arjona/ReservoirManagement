@@ -1,0 +1,42 @@
+{
+  "problem_id": "problem_3_8_004",
+  "num_pumps": 3,
+  "horizon": 8,
+  "pump_power": [
+    20.9,
+    24.9,
+    16.7
+  ],
+  "pump_flows": [
+    58.7,
+    73.8,
+    61.9
+  ],
+  "electricity_prices": [
+    169.0,
+    169.0,
+    169.0,
+    169.0,
+    169.0,
+    169.0,
+    169.0,
+    283.0
+  ],
+  "demand": [
+    62.77,
+    58.25,
+    55.36,
+    60.07,
+    91.08,
+    86.79,
+    85.82,
+    85.55
+  ],
+  "v_init": 146.4,
+  "v_min": 131.8,
+  "v_max": 512.4,
+  "max_active_pumps": 2,
+  "min_pump_usage": 1.0,
+  "time_step_hours": 1.0,
+  "power_limits": null
+}

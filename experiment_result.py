@@ -1,32 +1,37 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, asdict, field
+from typing import List, Any
+
 
 @dataclass(slots=True)
 class ExperimentResult:
     """
-    Representa una solución candidata encontrada por el algoritmo.
-    Contiene el horario, coste y validaciones de restricciones.
+    Representa el resultado de una ejecución (sea exitosa o no).
     """
-    schedule: List[List[int]]  # Matriz TxN (0 o 1)
-    total_cost: float
-    final_volume_ok: bool
-    min_usage_ok: bool
-    volumes: List[float]       # Evolución del volumen del tanque
+    # --- Datos Matemáticos de la Solución (Pueden ser vacíos si falla) ---
+    schedule: List[List[int]] | None  # Matriz TxN
+    total_cost: float | None
+    volumes: List[float] | None
 
-    @property
-    def is_feasible(self) -> bool:
-        """Devuelve True si cumple todas las restricciones obligatorias."""
-        return self.final_volume_ok and self.min_usage_ok
+    # --- Metadatos del Experimento ---
+    problem_id: str = field(default="")
+    algorithm: str = field(default="")
+    execution_time: float = field(default=0.0)
+
+    # Valores posibles: "Success", "Infeasible", "Exception", "Timeout"
+    status: str = field(default="Unknown")
 
     @property
     def utility(self) -> float | None:
         """
-        Utilidad para la cola de prioridad.
-        Queremos MINIMIZAR coste, por lo que la utilidad es el negativo del coste.
-        Retorna None si la solución es infactible.
+        Retorna la métrica de calidad para la TopKQueue.
+        Utility = -1 * Total Cost.
         """
-        if not self.is_feasible:
+        if self.total_cost is None:
             return None
         return -self.total_cost
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa el resultado a diccionario para guardar en JSON."""
+        return asdict(self)
