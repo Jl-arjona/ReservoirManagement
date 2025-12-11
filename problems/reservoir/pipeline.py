@@ -130,21 +130,16 @@ def run_phase1_for_instance(instance: ReservoirInstance) -> tuple[
 ]:
     """Hook donde enchufas tu lógica de Fase 1 para un problema.
 
-    Esperado:
-      - Devuelvas la lista de ExperimentResult (qubo, brute-force, etc.)
-      - Devuelvas, si procede, el mejor conjunto de penalizaciones encontrado
-        para ESA instancia (o None si tu fase1 no lo hace a nivel individual).
+    Implementación por defecto segura: no lanza excepciones y devuelve
+    resultados vacíos, permitiendo que el pipeline se ejecute de extremo a
+    extremo aunque aún no hayas conectado tu algoritmo.
     """
-    # ⚠️ Aquí va tu código real.
-    #
-    # Ejemplo-esqueleto (cámbialo por tus llamadas reales):
-    #
-    #   results = []
-    #   penalties = {"gamma": 0.1, "lam_c1": 10.0, "lam_c2": 3.0, "lam_c3": 0.5}
-    #   ...
-    #   return results, penalties
-    #
-    raise NotImplementedError("Implementa run_phase1_for_instance() con tu lógica.")
+
+    logger.warning(
+        "run_phase1_for_instance() usando implementación por defecto sin efectos para %s",
+        instance.problem_id,
+    )
+    return [], None
 
 
 def run_phase2_for_instance(
@@ -152,8 +147,11 @@ def run_phase2_for_instance(
     penalty_model: Any,
 ) -> List[ExperimentResult]:
     """Hook para Fase 2: aplicar modelo de penalizaciones a problemas nuevos."""
-    # ⚠️ Igual que arriba: aquí enchufas tu lógica real.
-    raise NotImplementedError("Implementa run_phase2_for_instance() con tu lógica.")
+    logger.warning(
+        "run_phase2_for_instance() usando implementación por defecto sin efectos para %s",
+        instance.problem_id,
+    )
+    return []
 
 
 # -------------------------------------------------------------------
@@ -179,7 +177,7 @@ def save_experiment_results(
         # Asumo que topk almacena ExperimentResult; ajusta si usas otro tipo.
         topk_path = run_dir / "topk.json"
         with topk_path.open("w", encoding="utf-8") as f:
-            json.dump([asdict(r) for r in topk.to_list()], f, indent=2)
+            json.dump([asdict(r) for r in topk.best_first()], f, indent=2)
         logger.info("Guardadas mejores soluciones (top-k) en %s", topk_path)
 
     # 3) Penalizaciones por problema
@@ -208,17 +206,13 @@ def main() -> None:
     # pluggeando run_phase1_for_instance().
     all_results_phase1: List[ExperimentResult] = []
     penalties_by_problem: Dict[str, Dict[str, float]] = {}
-    topk = TopKQueue(max_size=10)
+    topk = TopKQueue(k=10)
 
     for path in train_files:
         inst = load_instance(path)
         logger.info("Fase1 - problema %s", inst.problem_id)
 
-        try:
-            results, best_penalties = run_phase1_for_instance(inst)
-        except NotImplementedError:
-            logger.error("run_phase1_for_instance no implementado todavía.")
-            return
+        results, best_penalties = run_phase1_for_instance(inst)
 
         all_results_phase1.extend(results)
 
@@ -226,7 +220,7 @@ def main() -> None:
         for r in results:
             # asumo que ExperimentResult tiene atributo 'utility'
             if getattr(r, "utility", None) is not None:
-                topk.push(r, r.utility)
+                topk.push(r)
 
         if best_penalties is not None:
             penalties_by_problem[inst.problem_id] = best_penalties
@@ -253,7 +247,7 @@ def main() -> None:
     # penalty_model = train_penalty_model_from_phase1(penalties_by_problem, train_files)
     #
     # all_results_phase2: List[ExperimentResult] = []
-    # topk_phase2 = TopKQueue(max_size=10)
+    # topk_phase2 = TopKQueue(k=10)
     #
     # for path in test_files:
     #     inst = load_instance(path)
@@ -261,7 +255,7 @@ def main() -> None:
     #     all_results_phase2.extend(results)
     #     for r in results:
     #         if getattr(r, "utility", None) is not None:
-    #             topk_phase2.push(r, r.utility)
+    #             topk_phase2.push(r)
     #
     # run_dir_phase2 = make_run_dir(tag="phase2")
     # save_experiment_results(

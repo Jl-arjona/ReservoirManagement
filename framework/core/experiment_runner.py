@@ -2,107 +2,106 @@
 from __future__ import annotations
 
 import concurrent.futures as cf
-import datetime as dt
 import logging
-import time
+from datetime import datetime, timezone
+from time import perf_counter
 import traceback as tb
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, TypeAlias
 
 from .types import ExperimentResult, RunStatus
 
 logger = logging.getLogger(__name__)
 
 
-def _run_algo_inner(
-    algo_fn: Callable[..., Tuple[Dict[str, int], float, float, float, Dict[str, Any]]],
-    problem: Any,
-    algo_kwargs: Dict[str, Any],
-) -> Tuple[Dict[str, int], float, float, float, Dict[str, Any]]:
-    """
-    Ejecuta el algoritmo y retorna:
-      (solution_dict, energy, utility, cost, meta)
-    """
-    return algo_fn(problem, **algo_kwargs)
+# (solution, energy, utility, cost, meta)
+RawAlgoResult: TypeAlias = tuple[Dict[str, int], float, float, float, Dict[str, Any]]
+
 
 
 def run_with_timeout(
     problem: Any,
     algo_name: str,
-    algo_fn: Callable[..., Tuple[Dict[str, int], float, float, float, Dict[str, Any]]],
+    algo_fn: Callable[..., RawAlgoResult],
     timeout_sec: float,
     algo_kwargs: Dict[str, Any] | None = None,
 ) -> ExperimentResult:
     """
-    Ejecuta un algoritmo con timeout, captura excepciones, tiempos,
+  Ejecuta un algoritmo con timeout, captura excepciones y tiempos,
     y empaqueta todo en un ExperimentResult.
     """
     algo_kwargs = algo_kwargs or {}
+    problem_id = getattr(problem, "problem_id", "unknown")
 
-    start_dt = dt.datetime.utcnow()
-    start_time = start_dt.isoformat()
-    problem_id = getattr(problem, "problem_id", "?")
+    start_dt = datetime.now(timezone.utc)
+    logger.info("[%s] Starting on problem %s at %s", algo_name, problem_id, start_dt.isoformat())
 
-    logger.info(f"[{algo_name}] Starting on problem {problem_id} at {start_time}")
+    result_data: Dict[str, Any] = {
+        "solution": None,
+        "energy": None,
+        "utility": None,
+        "cost": None,
+        "meta": {},
+        "exception_type": None,
+        "exception_message": None,
+        "exception_traceback": None,
+    }
 
-    solution = None
-    energy = None
-    utility = None
-    cost = None
-    meta: Dict[str, Any] = {}
 
     status = RunStatus.OK
-    exc_type = None
-    exc_msg = None
-    exc_tb_str = None
+    future: cf.Future[RawAlgoResult] | None = None
+    start_perf = perf_counter()
 
-    t0 = time.time()
+
     try:
         with cf.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_run_algo_inner, algo_fn, problem, algo_kwargs)
-            try:
-                solution, energy, utility, cost, meta = future.result(timeout=timeout_sec)
-            except cf.TimeoutError:
-                status = RunStatus.TIMEOUT
-                future.cancel()
-                logger.warning(f"[{algo_name}] Timeout after {timeout_sec:.1f}s on problem {problem_id}")
-            except Exception as e:  # noqa: BLE001
-                status = RunStatus.EXCEPTION
-                exc_type = type(e).__name__
-                exc_msg = str(e)
-                exc_tb_str = tb.format_exc()
-                logger.exception(f"[{algo_name}] Exception on problem {problem_id}: {exc_type}: {exc_msg}")
-    except Exception as e:  # noqa: BLE001
-        status = RunStatus.EXCEPTION
-        exc_type = type(e).__name__
-        exc_msg = str(e)
-        exc_tb_str = tb.format_exc()
-        logger.exception(f"[{algo_name}] Outer exception on problem {problem_id}: {exc_type}: {exc_msg}")
+            future = executor.submit(algo_fn, problem, **algo_kwargs)
+            solution, energy, utility, cost, meta = future.result(timeout=timeout_sec)
+            result_data.update(
+                {
+                    "solution": solution,
+                    "energy": energy,
+                    "utility": utility,
+                    "cost": cost,
+                    "meta": meta,
+                }
+            )
+    except cf.TimeoutError:
+        status = RunStatus.TIMEOUT
+        if future:
+            future.cancel()
+        logger.warning("[%s] Timeout after %.1fs on problem %s", algo_name, timeout_sec, problem_id)
 
-    t1 = time.time()
-    end_dt = dt.datetime.utcnow()
-    end_time = end_dt.isoformat()
-    wall = t1 - t0
+    except Exception as exc:  # noqa: BLE001
+        status = RunStatus.EXCEPTION
+        result_data.update(
+            {
+                "exception_type": type(exc).__name__,
+                "exception_message": str(exc),
+                "exception_traceback": tb.format_exc(),
+            }
+        )
+        logger.exception("[%s] Exception on problem %s", algo_name, problem_id)
+
+    wall = perf_counter() - start_perf
+    end_dt = datetime.now(timezone.utc)
 
     result = ExperimentResult(
         problem_id=problem_id,
         algo_name=algo_name,
         status=status,
-        start_time=start_time,
-        end_time=end_time,
+        start_time=start_dt.isoformat(),
+        end_time=end_dt.isoformat(),
         wall_time_sec=wall,
-        solution=solution,
-        energy=energy,
-        utility=utility,
-        cost=cost,
-        meta=meta,
-        exception_type=exc_type,
-        exception_message=exc_msg,
-        exception_traceback=exc_tb_str,
+        **result_data,
     )
 
     logger.info(
-        f"[{algo_name}] Finished on problem {problem_id} "
-        f"status={result.status.value}, wall_time={wall:.2f}s, "
-        f"utility={result.utility}, cost={result.cost}"
+        "[%s] Finished on problem %s status=%s, wall_time=%.2fs, utility=%s, cost=%s",
+        algo_name,
+        problem_id,
+        result.status.value,
+        wall,
+        result.utility,
+        result.cost,
     )
     return result

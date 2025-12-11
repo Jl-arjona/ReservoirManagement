@@ -128,8 +128,7 @@ def main():
     for inst, opt_cost, penalties in results_phase1:
         feats = reservoir_feature_vector(inst)
         X_list.append([feats[name] for name in feature_names])
-        y_list.append([penalties.values[name] for name in param_names])
-
+        y_list.append([penalties[name] for name in param_names])
         per_instance_opt_cost[inst.problem_id] = opt_cost
         per_instance_penalties[inst.problem_id] = penalties.to_dict()
 

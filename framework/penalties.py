@@ -4,26 +4,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Callable, Any, List, Optional
 
+from collections import UserDict
+
 import optuna
 
 
-@dataclass
-class PenaltyParams:
+class PenaltyParams(UserDict):
     """
-    Contenedor genérico: nombre_parametro -> valor.
-    Ej: {"gamma": 0.1, "lam_c1": 5.0, "lam_c2": 2.0, "lam_c3": 0.3}
+    Usa UserDict para comportarse como un dict estándar pero permite añadir
+    utilidades adicionales.
     """
-    values: Dict[str, float]
-
-    def __getitem__(self, name: str) -> float:
-        return self.values[name]
-
-    def __setitem__(self, name: str, value: float) -> None:
-        self.values[name] = float(value)
+    def __init__(self, initial: Dict[str, float] | None = None) -> None:
+        super().__init__({} if initial is None else dict(initial))
 
     def to_dict(self) -> Dict[str, float]:
-        return dict(self.values)
-
+        return dict(self.data)
 
 @dataclass
 class PenaltyParamConfig:

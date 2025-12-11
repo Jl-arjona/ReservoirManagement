@@ -1,14 +1,11 @@
 # problems/reservoir/model.py
 from __future__ import annotations
-# problems/reservoir/model.py
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Sequence, Dict, Any
 import json
 import random
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Sequence
 
 
 @dataclass
